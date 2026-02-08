@@ -8,6 +8,7 @@ import com.autoresafety.api.dto.ProjectPayload;
 import com.autoresafety.api.dto.ProjectResumeDto;
 import com.autoresafety.api.dto.ProjectStatusUpdatePayload;
 import com.autoresafety.api.dto.StepOneProjectInformationDto;
+import com.autoresafety.api.dto.StepOneProjectUpdatePayload;
 import com.autoresafety.api.dto.project.ProjectDocumentDto;
 import com.autoresafety.domain.Project;
 import com.autoresafety.domain.ProjectDocument;
@@ -81,6 +82,57 @@ public class ProjectResource {
             step1.getResponsibilities(),
             step1.getArtefacts()
         );
+    }
+
+    @POST
+    @Path("/step_one_project_update")
+    @Transactional
+    public Response updateStepOne(@Valid StepOneProjectUpdatePayload payload) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(payload.id());
+        if (document == null) {
+            throw new NotFoundException();
+        }
+
+        ProjectDocumentDto.Step1ScopeDto step1 = document.getStep1Scope();
+        if (step1 == null) {
+            step1 = ProjectDocumentDto.Step1ScopeDto.builder().build();
+        }
+
+        if (payload.lastUpdatedBy() != null) {
+            step1.setLastUpdatedBy(payload.lastUpdatedBy());
+        }
+        if (payload.generalSummary() != null) {
+            step1.setGeneralSummary(payload.generalSummary());
+        }
+        if (payload.objectives() != null) {
+            step1.setObjectives(payload.objectives());
+        }
+        if (payload.resources() != null) {
+            step1.setResources(payload.resources());
+        }
+        if (payload.systemComponents() != null) {
+            step1.setSystemComponents(payload.systemComponents());
+        }
+        if (payload.accidents() != null) {
+            step1.setAccidents(payload.accidents());
+        }
+        if (payload.hazards() != null) {
+            step1.setHazards(payload.hazards());
+        }
+        if (payload.safetyConstraints() != null) {
+            step1.setSafetyConstraints(payload.safetyConstraints());
+        }
+        if (payload.responsibilities() != null) {
+            step1.setResponsibilities(payload.responsibilities());
+        }
+        if (payload.artefacts() != null) {
+            step1.setArtefacts(payload.artefacts());
+        }
+
+        document.setStep1Scope(step1);
+        projectDocumentService.saveOrUpdate(payload.id(), document);
+
+        return Response.ok().build();
     }
 
     private static String formatObjectives(String objectives) {
