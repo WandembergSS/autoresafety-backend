@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import com.autoresafety.domain.ProjectStatus;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -15,6 +17,6 @@ public class ProjectResumeDto {
     private String domain;
     private String owner;
     private String description;
-    private String status;
+    private ProjectStatus status;
     private Integer currentStep;
 }

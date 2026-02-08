@@ -1,6 +1,8 @@
 package com.autoresafety.api.dto.project;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.autoresafety.domain.ProjectStatus;
+import com.autoresafety.api.dto.project.SourceType;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import lombok.AllArgsConstructor;
@@ -49,7 +51,7 @@ public class ProjectDocumentPatchDto {
 
                 private String description;
 
-                private String status;
+                private ProjectStatus status;
 
                 @PositiveOrZero
                 private Integer currentStep;
@@ -64,6 +66,7 @@ public class ProjectDocumentPatchDto {
         @NoArgsConstructor
         @AllArgsConstructor
         public static class Step1ScopePatchDto {
+                private String lastUpdatedBy;
                 private GeneralSummaryPatchDto generalSummary;
                 private List<ObjectivePatchDto> objectives;
                 private List<ResourcePatchDto> resources;
@@ -80,11 +83,13 @@ public class ProjectDocumentPatchDto {
                 @NoArgsConstructor
                 @AllArgsConstructor
                 public static class GeneralSummaryPatchDto {
-                        private String analysisPurpose;
+                        private String assumptions;
 
                         private String systemDefinition;
 
                         private String systemBoundary;
+
+                        private String outOfScope;
                 }
 
                 @JsonInclude(NON_NULL)
@@ -117,6 +122,8 @@ public class ProjectDocumentPatchDto {
                         private String category;
 
                         private String reference;
+
+                        private SourceType sourceType;
                 }
 
                 @JsonInclude(NON_NULL)
@@ -130,7 +137,7 @@ public class ProjectDocumentPatchDto {
 
                         private String name;
 
-                        private String notes;
+                        private String description;
                 }
 
                 @JsonInclude(NON_NULL)
@@ -160,7 +167,7 @@ public class ProjectDocumentPatchDto {
 
                         private String description;
 
-                        private String linkedAccidents;
+                        private List<String> linkedAccidents;
                 }
 
                 @JsonInclude(NON_NULL)
@@ -176,7 +183,7 @@ public class ProjectDocumentPatchDto {
 
                         private String statement;
 
-                        private String linkedHazards;
+                        private List<String> linkedHazards;
                 }
 
                 @JsonInclude(NON_NULL)
@@ -192,7 +199,7 @@ public class ProjectDocumentPatchDto {
 
                         private String responsibility;
 
-                        private String linkedConstraints;
+                        private List<String> linkedConstraints;
                 }
 
                 @JsonInclude(NON_NULL)

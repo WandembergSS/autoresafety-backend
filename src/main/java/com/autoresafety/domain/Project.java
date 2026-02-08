@@ -4,6 +4,8 @@ import java.time.OffsetDateTime;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.validation.constraints.NotBlank;
@@ -20,8 +22,9 @@ public class Project extends PanacheEntity {
     @Column(columnDefinition = "TEXT")
     public String description;
 
+    @Enumerated(EnumType.STRING)
     @Column(length = 40, nullable = false)
-    public String status = "draft";
+    public ProjectStatus status = ProjectStatus.PENDING;
 
     @Column(name = "created_at", nullable = false)
     public OffsetDateTime createdAt;

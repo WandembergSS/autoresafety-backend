@@ -4,6 +4,7 @@ import com.autoresafety.api.dto.ProjectResumeDto;
 import com.autoresafety.api.dto.project.ProjectDocumentDto;
 import com.autoresafety.domain.Project;
 import com.autoresafety.domain.ProjectDocument;
+import com.autoresafety.domain.ProjectStatus;
 import com.autoresafety.persistence.ProjectDocumentRepository;
 import com.autoresafety.persistence.ProjectRepository;
 import io.quarkus.panache.common.Sort;
@@ -31,7 +32,7 @@ public class ProjectResumeResource {
 
     @GET
     public List<ProjectResumeDto> listActiveResumes() {
-        List<Project> projects = projectRepository.find("lower(status) <> ?1", Sort.by("name"), "complete").list();
+        List<Project> projects = projectRepository.listAll(Sort.by("name"));
         if (projects.isEmpty()) {
             return List.of();
         }

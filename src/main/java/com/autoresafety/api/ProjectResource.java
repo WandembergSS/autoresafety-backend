@@ -6,8 +6,12 @@ import java.util.List;
 import com.autoresafety.api.dto.ProjectNamePayload;
 import com.autoresafety.api.dto.ProjectPayload;
 import com.autoresafety.api.dto.ProjectResumeDto;
+import com.autoresafety.api.dto.ProjectStatusUpdatePayload;
+import com.autoresafety.api.dto.StepOneProjectInformationDto;
 import com.autoresafety.api.dto.project.ProjectDocumentDto;
 import com.autoresafety.domain.Project;
+import com.autoresafety.domain.ProjectDocument;
+import com.autoresafety.domain.ProjectStatus;
 import com.autoresafety.persistence.ProjectRepository;
 import com.autoresafety.service.ProjectDocumentService;
 
@@ -26,6 +30,7 @@ import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -52,6 +57,39 @@ public class ProjectResource {
         return repository.findByIdOptional(id).orElseThrow(NotFoundException::new);
     }
 
+    @GET
+    @Path("/step_one_project_information/{id}")
+    public StepOneProjectInformationDto getStepOneInformation(@PathParam("id") Long id) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(id);
+        if (document == null) {
+            throw new NotFoundException();
+        }
+        if (document.getStep1Scope() == null) {
+            return new StepOneProjectInformationDto(null, null, null, null, null, null, null, null, null, null);
+        }
+
+        ProjectDocumentDto.Step1ScopeDto step1 = document.getStep1Scope();
+        return new StepOneProjectInformationDto(
+            step1.getLastUpdatedBy(),
+            step1.getGeneralSummary(),
+            formatObjectives(step1.getObjectives()),
+            step1.getResources(),
+            step1.getSystemComponents(),
+            step1.getAccidents(),
+            step1.getHazards(),
+            step1.getSafetyConstraints(),
+            step1.getResponsibilities(),
+            step1.getArtefacts()
+        );
+    }
+
+    private static String formatObjectives(String objectives) {
+        if (objectives == null || objectives.isBlank()) {
+            return null;
+        }
+        return objectives.trim();
+    }
+
     @POST
     @Transactional
     public Response create(@Valid ProjectPayload payload) {
@@ -66,7 +104,7 @@ public class ProjectResource {
     @POST
     @Path("/minimal-project-creation")
     @Transactional
-        public Response createMinimal(@Valid ProjectNamePayload payload) {
+    public Response createMinimal(@Valid ProjectNamePayload payload) {
         Project project = new Project();
         project.name = payload.getName();
         project.description = payload.getDescription();
@@ -99,6 +137,62 @@ public class ProjectResource {
             .build();
 
         return Response.created(URI.create("/api/projects/" + project.id)).entity(response).build();
+    }
+
+    @POST
+    @Path("/minimal-project-update")
+    @PermitAll
+    @Transactional
+    public Response updateMinimalStatus(@Valid ProjectStatusUpdatePayload payload) {
+        Project project = repository.findByIdOptional(payload.id()).orElseThrow(NotFoundException::new);
+        String requestedStatus = payload.status();
+        if (requestedStatus != null && requestedStatus.equalsIgnoreCase("REMOVED")) {
+            ProjectDocument.delete("project.id", project.id);
+            boolean deleted = repository.deleteById(project.id);
+            if (!deleted) {
+                throw new NotFoundException();
+            }
+            return Response.noContent().build();
+        }
+
+        ProjectStatus status = parseStatus(requestedStatus);
+        project.status = status;
+
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(project.id);
+        ProjectDocumentDto.ProjectDto projectInfo = document == null ? null : document.getProject();
+        if (projectInfo != null) {
+            projectInfo.setStatus(project.status);
+            projectDocumentService.saveOrUpdate(project.id, document);
+        }
+
+        ProjectResumeDto response = ProjectResumeDto.builder()
+            .id(project.id)
+            .name(project.name)
+            .description(project.description)
+            .status(project.status)
+            .domain(projectInfo == null ? null : projectInfo.getDomain())
+            .owner(projectInfo == null ? null : projectInfo.getOwner())
+            .currentStep(projectInfo == null ? null : projectInfo.getCurrentStep())
+            .build();
+
+        return Response.ok(response).build();
+    }
+
+    private static ProjectStatus parseStatus(String rawStatus) {
+        if (rawStatus == null || rawStatus.isBlank()) {
+            throw new BadRequestException("status is required");
+        }
+
+        String normalized = rawStatus.trim().toUpperCase();
+        if ("CANCELED".equals(normalized)) {
+            normalized = "CANCELLED";
+        }
+
+        try {
+            return ProjectStatus.valueOf(normalized);
+        } catch (IllegalArgumentException ex) {
+            throw new BadRequestException("Invalid status: " + rawStatus);
+        }
     }
 
     @PUT

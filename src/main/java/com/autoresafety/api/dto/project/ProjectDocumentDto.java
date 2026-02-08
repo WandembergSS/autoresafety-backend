@@ -3,6 +3,8 @@ package com.autoresafety.api.dto.project;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
+
+import com.autoresafety.domain.ProjectStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -47,7 +49,7 @@ public class ProjectDocumentDto {
 
                 private String description;
 
-                private String status;
+                private ProjectStatus status;
 
                 @PositiveOrZero
                 private Integer currentStep;
@@ -61,8 +63,9 @@ public class ProjectDocumentDto {
         @NoArgsConstructor
         @AllArgsConstructor
         public static class Step1ScopeDto {
+                private String lastUpdatedBy;
                 private GeneralSummaryDto generalSummary;
-                private List<ObjectiveDto> objectives;
+                private String objectives;
                 private List<ResourceDto> resources;
                 private List<SystemComponentDto> systemComponents;
                 private List<AccidentDto> accidents;
@@ -76,27 +79,16 @@ public class ProjectDocumentDto {
                 @NoArgsConstructor
                 @AllArgsConstructor
                 public static class GeneralSummaryDto {
-                        private String analysisPurpose;
+                        private String assumptions;
 
                         private String systemDefinition;
 
                         private String systemBoundary;
+
+                        private String outOfScope;
                 }
 
-                @Data
-                @Builder
-                @NoArgsConstructor
-                @AllArgsConstructor
-                public static class ObjectiveDto {
-                        @Positive
-                        private Long id;
 
-                        private String focus;
-
-                        private String stakeholder;
-
-                        private String priority;
-                }
 
                 @Data
                 @Builder
@@ -111,6 +103,8 @@ public class ProjectDocumentDto {
                         private String category;
 
                         private String reference;
+
+                        private SourceType sourceType;
                 }
 
                 @Data
@@ -123,7 +117,7 @@ public class ProjectDocumentDto {
 
                         private String name;
 
-                        private String notes;
+                        private String description;
                 }
 
                 @Data
@@ -151,7 +145,7 @@ public class ProjectDocumentDto {
 
                         private String description;
 
-                        private String linkedAccidents;
+                        private List<String> linkedAccidents;
                 }
 
                 @Data
@@ -166,7 +160,7 @@ public class ProjectDocumentDto {
 
                         private String statement;
 
-                        private String linkedHazards;
+                        private List<String> linkedHazards;
                 }
 
                 @Data
@@ -181,7 +175,7 @@ public class ProjectDocumentDto {
 
                         private String responsibility;
 
-                        private String linkedConstraints;
+                        private List<String> linkedConstraints;
                 }
 
                 @Data
