@@ -3,6 +3,7 @@ package com.autoresafety.api;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -12,6 +13,7 @@ import com.autoresafety.api.dto.ProjectNamePayload;
 import com.autoresafety.api.dto.ProjectPayload;
 import com.autoresafety.api.dto.ProjectResumeDto;
 import com.autoresafety.api.dto.ProjectStatusUpdatePayload;
+import com.autoresafety.api.dto.StepFourProjectUpdatePayload;
 import com.autoresafety.api.dto.StepOneProjectInformationDto;
 import com.autoresafety.api.dto.StepOneProjectUpdatePayload;
 import com.autoresafety.api.dto.StepThreeProjectUpdatePayload;
@@ -174,6 +176,138 @@ public class ProjectResource {
         }
 
         return document.getStep3ControlStructure();
+    }
+
+    @GET
+    @Path("/step_four_project_information/{id}")
+    public ProjectDocumentDto.Step4UcasDto getStepFourInformation(@PathParam("id") Long id) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(id);
+        if (document == null) {
+            throw new NotFoundException();
+        }
+
+        if (document.getStep4Ucas() == null) {
+            return ProjectDocumentDto.Step4UcasDto.builder()
+                .ucas(null)
+                .controllerConstraints(null)
+                .build();
+        }
+
+        return document.getStep4Ucas();
+    }
+
+    @GET
+    @Path("/step_five_project_information/{id}")
+    public ProjectDocumentDto.Step5ControllerConstraintsDto getStepFiveInformation(@PathParam("id") Long id) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(id);
+        if (document == null) {
+            throw new NotFoundException();
+        }
+
+        if (document.getStep5ControllerConstraints() == null) {
+            return ProjectDocumentDto.Step5ControllerConstraintsDto.builder()
+                .constraints(null)
+                .build();
+        }
+
+        return document.getStep5ControllerConstraints();
+    }
+
+    @GET
+    @Path("/step_six_project_information/{id}")
+    public ProjectDocumentDto.Step6LossScenariosDto getStepSixInformation(@PathParam("id") Long id) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(id);
+        if (document == null) {
+            throw new NotFoundException();
+        }
+
+        if (document.getStep6LossScenarios() == null) {
+            return ProjectDocumentDto.Step6LossScenariosDto.builder()
+                .lossScenarios(null)
+                .safetyRequirements(null)
+                .build();
+        }
+
+        return document.getStep6LossScenarios();
+    }
+
+    @GET
+    @Path("/step_three_project_export/{id}/json")
+    public Response exportStepThreeJson(@PathParam("id") Long id) {
+        ProjectDocumentDto.Step3ControlStructureDto step3 = getStepThreeInformation(id);
+        return Response.ok(step3)
+            .type(MediaType.APPLICATION_JSON)
+            .header("Content-Disposition", "attachment; filename=project-" + id + "-step3-control-structure.json")
+            .build();
+    }
+
+    @GET
+    @Path("/step_three_project_export/{id}/image")
+    @Produces("image/svg+xml")
+    public Response exportStepThreeImage(@PathParam("id") Long id) {
+        ProjectDocumentDto.Step3ControlStructureDto step3 = getStepThreeInformation(id);
+        String svg = buildStepThreeSvg(step3);
+
+        return Response.ok(svg)
+            .type("image/svg+xml")
+            .header("Content-Disposition", "attachment; filename=project-" + id + "-step3-control-structure.svg")
+            .build();
+    }
+
+    @POST
+    @Path("/step_four_project_update")
+    @Transactional
+    public Response updateStepFour(@Valid StepFourProjectUpdatePayload payload) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(payload.id());
+        if (document == null) {
+            throw new NotFoundException();
+        }
+
+        ProjectDocumentDto.Step4UcasDto current = document.getStep4Ucas();
+        if (current == null) {
+            current = ProjectDocumentDto.Step4UcasDto.builder().build();
+        }
+
+        if (payload.step4Information() != null) {
+            if (payload.step4Information().ucas() != null) {
+                List<ProjectDocumentDto.Step4UcasDto.UcaDto> mappedUcas = new ArrayList<>();
+                for (StepFourProjectUpdatePayload.UcaPayload uca : payload.step4Information().ucas()) {
+                    if (uca == null) {
+                        continue;
+                    }
+
+                    mappedUcas.add(ProjectDocumentDto.Step4UcasDto.UcaDto.builder()
+                        .id(uca.id())
+                        .controller(uca.controller())
+                        .controlAction(uca.controlAction())
+                        .hazard(uca.hazard())
+                        .category(uca.category())
+                        .build());
+                }
+                current.setUcas(mappedUcas);
+            }
+
+            if (payload.step4Information().controllerConstraints() != null) {
+                List<ProjectDocumentDto.Step4UcasDto.ControllerConstraintDto> mappedConstraints = new ArrayList<>();
+                for (StepFourProjectUpdatePayload.ControllerConstraintPayload constraint : payload.step4Information().controllerConstraints()) {
+                    if (constraint == null) {
+                        continue;
+                    }
+
+                    mappedConstraints.add(ProjectDocumentDto.Step4UcasDto.ControllerConstraintDto.builder()
+                        .id(constraint.id())
+                        .sourceUcaHc(constraint.sourceUcaHc())
+                        .constraintId(constraint.constraintId())
+                        .constraintStatement(constraint.constraintStatement())
+                        .build());
+                }
+                current.setControllerConstraints(mappedConstraints);
+            }
+        }
+
+        document.setStep4Ucas(current);
+        projectDocumentService.saveOrUpdate(payload.id(), document);
+        return Response.ok().build();
     }
 
     @POST
@@ -392,6 +526,111 @@ public class ProjectResource {
         } catch (NumberFormatException ignored) {
             return null;
         }
+    }
+
+    private static String buildStepThreeSvg(ProjectDocumentDto.Step3ControlStructureDto step3) {
+        Set<String> nodes = new LinkedHashSet<>();
+        List<ProjectDocumentDto.Step3ControlStructureDto.ControlActionDto> actions =
+            step3 == null ? null : step3.getControlActions();
+        List<ProjectDocumentDto.Step3ControlStructureDto.FeedbackLoopDto> feedbacks =
+            step3 == null ? null : step3.getFeedbackLoops();
+
+        if (actions != null) {
+            for (ProjectDocumentDto.Step3ControlStructureDto.ControlActionDto action : actions) {
+                if (action == null) {
+                    continue;
+                }
+                if (action.getController() != null && !action.getController().isBlank()) {
+                    nodes.add(action.getController().trim());
+                }
+                if (action.getControlledProcess() != null && !action.getControlledProcess().isBlank()) {
+                    nodes.add(action.getControlledProcess().trim());
+                }
+            }
+        }
+
+        if (feedbacks != null) {
+            for (ProjectDocumentDto.Step3ControlStructureDto.FeedbackLoopDto feedback : feedbacks) {
+                if (feedback == null) {
+                    continue;
+                }
+                if (feedback.getSource() != null && !feedback.getSource().isBlank()) {
+                    nodes.add(feedback.getSource().trim());
+                }
+                if (feedback.getDestination() != null && !feedback.getDestination().isBlank()) {
+                    nodes.add(feedback.getDestination().trim());
+                }
+            }
+        }
+
+        int nodeCount = Math.max(nodes.size(), 1);
+        int width = Math.max(900, 220 * nodeCount);
+        int height = 520;
+        int boxWidth = 170;
+        int boxHeight = 56;
+        int leftPadding = 40;
+        int topRowY = 90;
+        int bottomRowY = 320;
+        int spacing = nodeCount == 1 ? 0 : (width - (2 * leftPadding) - boxWidth) / (nodeCount - 1);
+
+        List<String> nodeList = new ArrayList<>(nodes);
+        if (nodeList.isEmpty()) {
+            nodeList.add("No control structure data");
+        }
+
+        StringBuilder svg = new StringBuilder();
+        svg.append("<svg xmlns='http://www.w3.org/2000/svg' width='").append(width)
+            .append("' height='").append(height).append("' viewBox='0 0 ").append(width)
+            .append(" ").append(height).append("'>");
+        svg.append("<rect width='100%' height='100%' fill='white'/>");
+        svg.append("<text x='30' y='40' font-size='22' font-family='Arial' fill='#1F2937'>System Safety Control Structure</text>");
+
+        for (int i = 0; i < nodeList.size(); i++) {
+            int x = leftPadding + (spacing * i);
+            int y = i % 2 == 0 ? topRowY : bottomRowY;
+
+            svg.append("<rect x='").append(x).append("' y='").append(y)
+                .append("' width='").append(boxWidth).append("' height='").append(boxHeight)
+                .append("' rx='8' ry='8' fill='#EFF6FF' stroke='#2563EB' stroke-width='1.5'/>");
+            svg.append("<text x='").append(x + 10).append("' y='").append(y + 33)
+                .append("' font-size='13' font-family='Arial' fill='#1E3A8A'>")
+                .append(escapeSvg(nodeList.get(i))).append("</text>");
+        }
+
+        if (actions != null) {
+            for (ProjectDocumentDto.Step3ControlStructureDto.ControlActionDto action : actions) {
+                if (action == null || action.getController() == null || action.getControlledProcess() == null) {
+                    continue;
+                }
+                int sourceIndex = nodeList.indexOf(action.getController().trim());
+                int targetIndex = nodeList.indexOf(action.getControlledProcess().trim());
+                if (sourceIndex < 0 || targetIndex < 0) {
+                    continue;
+                }
+
+                int sx = leftPadding + (spacing * sourceIndex) + boxWidth;
+                int sy = (sourceIndex % 2 == 0 ? topRowY : bottomRowY) + (boxHeight / 2);
+                int tx = leftPadding + (spacing * targetIndex);
+                int ty = (targetIndex % 2 == 0 ? topRowY : bottomRowY) + (boxHeight / 2);
+                svg.append("<line x1='").append(sx).append("' y1='").append(sy)
+                    .append("' x2='").append(tx).append("' y2='").append(ty)
+                    .append("' stroke='#0F766E' stroke-width='2' marker-end='url(#arrow)'/>");
+            }
+        }
+
+        svg.append("<defs><marker id='arrow' markerWidth='10' markerHeight='7' refX='9' refY='3.5' orient='auto'>")
+            .append("<polygon points='0 0, 10 3.5, 0 7' fill='#0F766E'/></marker></defs>");
+        svg.append("</svg>");
+        return svg.toString();
+    }
+
+    private static String escapeSvg(String value) {
+        return value
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&apos;");
     }
 
     @POST

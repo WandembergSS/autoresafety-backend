@@ -1,6 +1,7 @@
 package com.autoresafety.api;
 
 import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 
@@ -294,6 +295,173 @@ class ProjectResourceTest extends QuarkusTestBase {
     }
 
     @Test
+    void stepFourProjectInformationEndpointReturnsUcas() {
+        long projectId = 1L;
+
+        ProjectDocumentDto document = ProjectDocumentDto.builder()
+            .project(ProjectDocumentDto.ProjectDto.builder()
+                .id(projectId)
+                .name("Step Four Project")
+                .build())
+            .step4Ucas(ProjectDocumentDto.Step4UcasDto.builder()
+                .ucas(List.of(ProjectDocumentDto.Step4UcasDto.UcaDto.builder()
+                    .id(1L)
+                    .controller("Autopilot")
+                    .controlAction("Adjust heading")
+                    .hazard("H-1")
+                    .category("Not provided")
+                    .build()))
+                .controllerConstraints(List.of(ProjectDocumentDto.Step4UcasDto.ControllerConstraintDto.builder()
+                    .id(1L)
+                    .sourceUcaHc("UCA-1")
+                    .constraintId("CC-01")
+                    .constraintStatement("Autopilot shall issue heading correction when obstacle distance is below threshold.")
+                    .build()))
+                .build())
+            .build();
+
+        projectDocumentService.saveOrUpdate(projectId, document);
+
+        given()
+            .when()
+            .get("/api/projects/step_four_project_information/" + projectId)
+            .then()
+            .statusCode(200)
+            .body("ucas[0].controller", equalTo("Autopilot"))
+                        .body("ucas[0].controlAction", equalTo("Adjust heading"))
+                        .body("controllerConstraints[0].sourceUcaHc", equalTo("UCA-1"))
+                        .body("controllerConstraints[0].constraintId", equalTo("CC-01"));
+        }
+
+        @Test
+        void stepFourProjectUpdateEndpointPersistsControllerConstraints() {
+                long projectId = 1L;
+
+                ProjectDocumentDto document = ProjectDocumentDto.builder()
+                        .project(ProjectDocumentDto.ProjectDto.builder()
+                                .id(projectId)
+                                .name("Step Four Update Project")
+                                .build())
+                        .step4Ucas(ProjectDocumentDto.Step4UcasDto.builder()
+                                .ucas(List.of())
+                                .controllerConstraints(List.of())
+                                .build())
+                        .build();
+
+                projectDocumentService.saveOrUpdate(projectId, document);
+
+                given()
+                        .contentType("application/json")
+                        .body("""
+                                {
+                                    "id": 1,
+                                    "step4Information": {
+                                        "controllerConstraints": [
+                                            {
+                                                "id": 1,
+                                                "sourceUcaHc": "UCA-1",
+                                                "constraintId": "CC-01",
+                                                "constraintStatement": "Autopilot shall provide Adjust heading when obstacle distance is below threshold."
+                                            },
+                                            {
+                                                "id": 2,
+                                                "sourceUcaHc": "HC-2",
+                                                "constraintId": "CC-02",
+                                                "constraintStatement": "Operator shall avoid Pause mission while automated avoidance is active unless emergency conditions are confirmed."
+                                            }
+                                        ]
+                                    }
+                                }
+                                """)
+                        .when()
+                        .post("/api/projects/step_four_project_update")
+                        .then()
+                        .statusCode(200);
+
+                given()
+                        .when()
+                        .get("/api/projects/step_four_project_information/" + projectId)
+                        .then()
+                        .statusCode(200)
+                        .body("controllerConstraints[0].sourceUcaHc", equalTo("UCA-1"))
+                        .body("controllerConstraints[0].constraintId", equalTo("CC-01"))
+                        .body("controllerConstraints[1].sourceUcaHc", equalTo("HC-2"));
+    }
+
+    @Test
+    void stepFiveProjectInformationEndpointReturnsControllerConstraints() {
+        long projectId = 1L;
+
+        ProjectDocumentDto document = ProjectDocumentDto.builder()
+            .project(ProjectDocumentDto.ProjectDto.builder()
+                .id(projectId)
+                .name("Step Five Project")
+                .build())
+            .step5ControllerConstraints(ProjectDocumentDto.Step5ControllerConstraintsDto.builder()
+                .constraints(List.of(ProjectDocumentDto.Step5ControllerConstraintsDto.ConstraintDto.builder()
+                    .id(1L)
+                    .ucaRef("UCA-1")
+                    .constraint("Maintain safe heading")
+                    .enforcementMechanism("Runtime guard")
+                    .status("defined")
+                    .build()))
+                .build())
+            .build();
+
+        projectDocumentService.saveOrUpdate(projectId, document);
+
+        given()
+            .when()
+            .get("/api/projects/step_five_project_information/" + projectId)
+            .then()
+            .statusCode(200)
+            .body("constraints[0].ucaRef", equalTo("UCA-1"))
+            .body("constraints[0].status", equalTo("defined"));
+    }
+
+    @Test
+    void stepSixProjectInformationEndpointReturnsLossScenarios() {
+        long projectId = 1L;
+
+        ProjectDocumentDto document = ProjectDocumentDto.builder()
+            .project(ProjectDocumentDto.ProjectDto.builder()
+                .id(projectId)
+                .name("Step Six Project")
+                .build())
+            .step6LossScenarios(ProjectDocumentDto.Step6LossScenariosDto.builder()
+                .lossScenarios(List.of(ProjectDocumentDto.Step6LossScenariosDto.LossScenarioDto.builder()
+                    .id(1L)
+                    .uca("UCA-1")
+                    .hazard("H-1")
+                    .outcome("Collision")
+                    .severity("High")
+                    .mitigations(List.of("Fallback mode"))
+                    .status("open")
+                    .build()))
+                .safetyRequirements(List.of(ProjectDocumentDto.Step6LossScenariosDto.SafetyRequirementDto.builder()
+                    .id(1L)
+                    .title("SR-1")
+                    .linkedScenario(1L)
+                    .category("functional")
+                    .owner("Safety Team")
+                    .dueDate(LocalDate.of(2026, 7, 1))
+                    .status("planned")
+                    .build()))
+                .build())
+            .build();
+
+        projectDocumentService.saveOrUpdate(projectId, document);
+
+        given()
+            .when()
+            .get("/api/projects/step_six_project_information/" + projectId)
+            .then()
+            .statusCode(200)
+            .body("lossScenarios[0].uca", equalTo("UCA-1"))
+            .body("safetyRequirements[0].title", equalTo("SR-1"));
+    }
+
+    @Test
     void stepOneUpdateReturns422WhenExistingStepThreeControllerIsNotDefinedInSystemComponents() {
         long projectId = 1L;
 
@@ -554,6 +722,87 @@ class ProjectResourceTest extends QuarkusTestBase {
                         .then()
                         .statusCode(422)
                         .body("message", equalTo("Invalid optionalElements.type: Unknown Optional Type"));
+                }
+
+                @Test
+                void stepThreeExportJsonEndpointReturnsDownloadableData() {
+                    long projectId = 1L;
+
+                    ProjectDocumentDto document = ProjectDocumentDto.builder()
+                        .project(ProjectDocumentDto.ProjectDto.builder()
+                            .id(projectId)
+                            .name("Step Three Export JSON")
+                            .build())
+                        .step1Scope(ProjectDocumentDto.Step1ScopeDto.builder()
+                            .systemComponents(List.of(ProjectDocumentDto.Step1ScopeDto.SystemComponentDto.builder()
+                                .id(1L)
+                                .name("Autopilot")
+                                .description("Navigation logic")
+                                .build()))
+                            .build())
+                        .step3ControlStructure(ProjectDocumentDto.Step3ControlStructureDto.builder()
+                            .controlActions(List.of(ProjectDocumentDto.Step3ControlStructureDto.ControlActionDto.builder()
+                                .id(1L)
+                                .controller("Autopilot")
+                                .action("Adjust heading")
+                                .controlledProcess("Operator")
+                                .build()))
+                            .build())
+                        .build();
+                    projectDocumentService.saveOrUpdate(projectId, document);
+
+                    given()
+                        .when()
+                        .get("/api/projects/step_three_project_export/" + projectId + "/json")
+                        .then()
+                        .statusCode(200)
+                        .header("Content-Disposition", containsString("step3-control-structure.json"))
+                        .body("controlActions[0].action", equalTo("Adjust heading"));
+                }
+
+                @Test
+                void stepThreeExportImageEndpointReturnsSvg() {
+                    long projectId = 1L;
+
+                    ProjectDocumentDto document = ProjectDocumentDto.builder()
+                        .project(ProjectDocumentDto.ProjectDto.builder()
+                            .id(projectId)
+                            .name("Step Three Export SVG")
+                            .build())
+                        .step1Scope(ProjectDocumentDto.Step1ScopeDto.builder()
+                            .systemComponents(List.of(ProjectDocumentDto.Step1ScopeDto.SystemComponentDto.builder()
+                                .id(1L)
+                                .name("Autopilot")
+                                .description("Navigation logic")
+                                .build()))
+                            .build())
+                        .step3ControlStructure(ProjectDocumentDto.Step3ControlStructureDto.builder()
+                            .controlActions(List.of(ProjectDocumentDto.Step3ControlStructureDto.ControlActionDto.builder()
+                                .id(1L)
+                                .controller("Autopilot")
+                                .action("Adjust heading")
+                                .controlledProcess("Operator")
+                                .build()))
+                            .feedbackLoops(List.of(ProjectDocumentDto.Step3ControlStructureDto.FeedbackLoopDto.builder()
+                                .id(1L)
+                                .source("Sensor")
+                                .destination("Autopilot")
+                                .signal("Distance")
+                                .latency("<100ms")
+                                .build()))
+                            .build())
+                        .build();
+                    projectDocumentService.saveOrUpdate(projectId, document);
+
+                    given()
+                        .when()
+                        .get("/api/projects/step_three_project_export/" + projectId + "/image")
+                        .then()
+                        .statusCode(200)
+                        .contentType(containsString("image/svg+xml"))
+                        .header("Content-Disposition", containsString("step3-control-structure.svg"))
+                        .body(containsString("<svg"))
+                        .body(containsString("System Safety Control Structure"));
                 }
 
 }

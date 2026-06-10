@@ -95,6 +95,12 @@ VALUES (
           "name": "System architecture",
           "purpose": "Describe components",
           "reference": "ARCH-001"
+        },
+        {
+          "id": 2,
+          "name": "3. System Safety Control Structure",
+          "purpose": "Controllers, controlled processes, and control actions",
+          "reference": "SKETCH-003"
         }
       ]
     },
@@ -169,7 +175,42 @@ VALUES (
           "controller": "Operator",
           "controlAction": "Pause mission",
           "hazard": "H-1",
-          "category": "Provided too late"
+          "category": "Incorrect duration"
+        },
+        {
+          "id": 3,
+          "controller": "Autopilot",
+          "controlAction": "Adjust heading",
+          "hazard": "H-1",
+          "category": "Incorrect timing"
+        },
+        {
+          "id": 4,
+          "controller": "Operator",
+          "controlAction": "Pause mission",
+          "hazard": "H-1",
+          "category": "Provided"
+        },
+        {
+          "id": 5,
+          "controller": "Autopilot",
+          "controlAction": "Pause mission",
+          "hazard": "H-1",
+          "category": "Not provided"
+        }
+      ],
+      "controllerConstraints": [
+        {
+          "id": 1,
+          "sourceUcaHc": "UCA-1",
+          "constraintId": "CC-01",
+          "constraintStatement": "Autopilot shall provide Adjust heading when obstacle distance is below threshold."
+        },
+        {
+          "id": 2,
+          "sourceUcaHc": "UCA-2",
+          "constraintId": "CC-02",
+          "constraintStatement": "Operator shall not issue Pause mission during obstacle avoidance maneuver unless emergency conditions are confirmed."
         }
       ]
     },

@@ -308,6 +308,7 @@ public class ProjectDocumentDto {
         @AllArgsConstructor
         public static class Step4UcasDto {
                 private List<UcaDto> ucas;
+                private List<ControllerConstraintDto> controllerConstraints;
 
                 @Data
                 @Builder
@@ -324,6 +325,21 @@ public class ProjectDocumentDto {
                         private String hazard;
 
                         private String category;
+                }
+
+                @Data
+                @Builder
+                @NoArgsConstructor
+                @AllArgsConstructor
+                public static class ControllerConstraintDto {
+                        @Positive
+                        private Long id;
+
+                        private String sourceUcaHc;
+
+                        private String constraintId;
+
+                        private String constraintStatement;
                 }
         }
 
