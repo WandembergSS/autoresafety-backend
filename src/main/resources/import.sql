@@ -5,6 +5,8 @@
 -- insert into myentity (id, field) values(3, 'field-3');
 -- alter sequence myentity_seq restart with 4;
 
--- Sample project with Step 1 fully populated (Project ID = 2)
+-- Sample project with full document seeded by ProjectDocumentDevSeed (Project ID = 1)
 INSERT INTO project (id, name, description, status, created_at, updated_at)
-VALUES (2, 'Example Project', 'Step 1 sample', 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+VALUES (1, 'Chapter Case Study Project', 'Complete STPA chapter case for application', 'PENDING', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+
+ALTER SEQUENCE project_seq RESTART WITH 2;

@@ -239,6 +239,7 @@ public class ProjectDocumentDto {
         public static class Step3ControlStructureDto {
                 private List<ControlActionDto> controlActions;
                 private List<FeedbackLoopDto> feedbackLoops;
+                private List<OptionalElementDto> optionalElements;
 
                 @Data
                 @Builder
@@ -272,6 +273,32 @@ public class ProjectDocumentDto {
                         private String signal;
 
                         private String latency;
+                }
+
+                @Data
+                @Builder
+                @NoArgsConstructor
+                @AllArgsConstructor
+                public static class OptionalElementDto {
+                        private String id;
+
+                        private String type;
+
+                        private String name;
+
+                        private String sourceKind;
+
+                        private String sourceEntityId;
+
+                        private String sourceExternalId;
+
+                        private String destinationKind;
+
+                        private String destinationEntityId;
+
+                        private String destinationExternalId;
+
+                        private String responsibilityId;
                 }
         }
 
