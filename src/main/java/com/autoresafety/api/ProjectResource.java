@@ -189,6 +189,7 @@ public class ProjectResource {
         if (document.getStep4Ucas() == null) {
             return ProjectDocumentDto.Step4UcasDto.builder()
                 .ucas(null)
+                .hazardousConditions(null)
                 .controllerConstraints(null)
                 .build();
         }
@@ -258,7 +259,25 @@ public class ProjectResource {
     @Path("/step_four_project_update")
     @Transactional
     public Response updateStepFour(@Valid StepFourProjectUpdatePayload payload) {
-        ProjectDocumentDto document = projectDocumentService.getByProjectId(payload.id());
+        return updateStepFourById(payload.id(), payload.step4Information());
+    }
+
+    @POST
+    @Path("/step_four_project_update/{id}")
+    @Transactional
+    public Response updateStepFourByPath(@PathParam("id") Long id, @Valid StepFourProjectUpdatePayload payload) {
+        Long payloadId = payload == null ? null : payload.id();
+        if (payloadId != null && !payloadId.equals(id)) {
+            throw new BadRequestException("Path id does not match payload id");
+        }
+
+        Long effectiveId = payloadId == null ? id : payloadId;
+        StepFourProjectUpdatePayload.Step4Information step4Information = payload == null ? null : payload.step4Information();
+        return updateStepFourById(effectiveId, step4Information);
+    }
+
+    private Response updateStepFourById(Long projectId, StepFourProjectUpdatePayload.Step4Information step4Information) {
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(projectId);
         if (document == null) {
             throw new NotFoundException();
         }
@@ -268,28 +287,63 @@ public class ProjectResource {
             current = ProjectDocumentDto.Step4UcasDto.builder().build();
         }
 
-        if (payload.step4Information() != null) {
-            if (payload.step4Information().ucas() != null) {
+        if (step4Information != null) {
+            if (step4Information.unsafeControlActions() != null) {
                 List<ProjectDocumentDto.Step4UcasDto.UcaDto> mappedUcas = new ArrayList<>();
-                for (StepFourProjectUpdatePayload.UcaPayload uca : payload.step4Information().ucas()) {
+                for (StepFourProjectUpdatePayload.UcaPayload uca : step4Information.unsafeControlActions()) {
                     if (uca == null) {
                         continue;
                     }
 
+                    List<String> hazardRefs = uca.hazardRefs();
+                    if ((hazardRefs == null || hazardRefs.isEmpty()) && uca.hazard() != null && !uca.hazard().isBlank()) {
+                        hazardRefs = List.of(uca.hazard());
+                    }
+
                     mappedUcas.add(ProjectDocumentDto.Step4UcasDto.UcaDto.builder()
                         .id(uca.id())
+                        .ref(uca.ref())
+                        .controlActionRef(uca.controlActionRef())
+                        .sourceActor(uca.sourceActor())
+                        .targetActor(uca.targetActor())
                         .controller(uca.controller())
                         .controlAction(uca.controlAction())
+                        .controlledProcess(uca.controlledProcess())
                         .hazard(uca.hazard())
                         .category(uca.category())
+                        .context(uca.context())
+                        .consequence(uca.consequence())
+                        .rationale(uca.rationale())
+                        .hazardRefs(hazardRefs)
+                        .responsibilityId(uca.responsibilityId())
+                        .safetyConstraintId(uca.safetyConstraintId())
                         .build());
                 }
                 current.setUcas(mappedUcas);
             }
 
-            if (payload.step4Information().controllerConstraints() != null) {
+            if (step4Information.hazardousConditions() != null) {
+                List<ProjectDocumentDto.Step4UcasDto.HazardousConditionDto> mappedHazardousConditions = new ArrayList<>();
+                for (StepFourProjectUpdatePayload.HazardousConditionPayload condition : step4Information.hazardousConditions()) {
+                    if (condition == null) {
+                        continue;
+                    }
+
+                    mappedHazardousConditions.add(ProjectDocumentDto.Step4UcasDto.HazardousConditionDto.builder()
+                        .id(condition.id())
+                        .ref(condition.ref())
+                        .description(condition.description())
+                        .context(condition.context())
+                        .consequence(condition.consequence())
+                        .hazardRefs(condition.hazardRefs())
+                        .build());
+                }
+                current.setHazardousConditions(mappedHazardousConditions);
+            }
+
+            if (step4Information.controllerConstraints() != null) {
                 List<ProjectDocumentDto.Step4UcasDto.ControllerConstraintDto> mappedConstraints = new ArrayList<>();
-                for (StepFourProjectUpdatePayload.ControllerConstraintPayload constraint : payload.step4Information().controllerConstraints()) {
+                for (StepFourProjectUpdatePayload.ControllerConstraintPayload constraint : step4Information.controllerConstraints()) {
                     if (constraint == null) {
                         continue;
                     }
@@ -306,7 +360,7 @@ public class ProjectResource {
         }
 
         document.setStep4Ucas(current);
-        projectDocumentService.saveOrUpdate(payload.id(), document);
+        projectDocumentService.saveOrUpdate(projectId, document);
         return Response.ok().build();
     }
 

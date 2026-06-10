@@ -306,11 +306,22 @@ class ProjectResourceTest extends QuarkusTestBase {
             .step4Ucas(ProjectDocumentDto.Step4UcasDto.builder()
                 .ucas(List.of(ProjectDocumentDto.Step4UcasDto.UcaDto.builder()
                     .id(1L)
+                    .ref("UCA-01")
+                    .controlActionRef("CA-02")
+                    .sourceActor("Autopilot")
+                    .targetActor("Operator")
                     .controller("Autopilot")
                     .controlAction("Adjust heading")
-                    .hazard("H-1")
+                    .controlledProcess("Operator")
                     .category("Not provided")
+                    .context("Context pending refinement")
+                    .consequence("Consequence pending refinement")
+                    .rationale("Rationale pending refinement")
+                    .hazardRefs(List.of("H-1"))
+                    .responsibilityId("")
+                    .safetyConstraintId("")
                     .build()))
+                .hazardousConditions(List.of())
                 .controllerConstraints(List.of(ProjectDocumentDto.Step4UcasDto.ControllerConstraintDto.builder()
                     .id(1L)
                     .sourceUcaHc("UCA-1")
@@ -327,65 +338,84 @@ class ProjectResourceTest extends QuarkusTestBase {
             .get("/api/projects/step_four_project_information/" + projectId)
             .then()
             .statusCode(200)
+            .body("unsafeControlActions[0].ref", equalTo("UCA-01"))
+            .body("unsafeControlActions[0].sourceActor", equalTo("Autopilot"))
             .body("ucas[0].controller", equalTo("Autopilot"))
-                        .body("ucas[0].controlAction", equalTo("Adjust heading"))
-                        .body("controllerConstraints[0].sourceUcaHc", equalTo("UCA-1"))
-                        .body("controllerConstraints[0].constraintId", equalTo("CC-01"));
-        }
+            .body("ucas[0].controlAction", equalTo("Adjust heading"))
+            .body("controllerConstraints[0].sourceUcaHc", equalTo("UCA-1"))
+            .body("controllerConstraints[0].constraintId", equalTo("CC-01"));
+    }
 
-        @Test
-        void stepFourProjectUpdateEndpointPersistsControllerConstraints() {
-                long projectId = 1L;
+    @Test
+    void stepFourProjectUpdateEndpointWithPathIdPersistsFullStep4Schema() {
+        long projectId = 1L;
 
-                ProjectDocumentDto document = ProjectDocumentDto.builder()
-                        .project(ProjectDocumentDto.ProjectDto.builder()
-                                .id(projectId)
-                                .name("Step Four Update Project")
-                                .build())
-                        .step4Ucas(ProjectDocumentDto.Step4UcasDto.builder()
-                                .ucas(List.of())
-                                .controllerConstraints(List.of())
-                                .build())
-                        .build();
+        ProjectDocumentDto document = ProjectDocumentDto.builder()
+            .project(ProjectDocumentDto.ProjectDto.builder()
+                .id(projectId)
+                .name("Step Four Update Project")
+                .build())
+            .step4Ucas(ProjectDocumentDto.Step4UcasDto.builder()
+                .ucas(List.of())
+                .hazardousConditions(List.of())
+                .controllerConstraints(List.of())
+                .build())
+            .build();
 
-                projectDocumentService.saveOrUpdate(projectId, document);
+        projectDocumentService.saveOrUpdate(projectId, document);
 
-                given()
-                        .contentType("application/json")
-                        .body("""
+        given()
+            .contentType("application/json")
+            .body("""
+                    {
+                        "id": 1,
+                        "step4Information": {
+                            "unsafeControlActions": [
                                 {
                                     "id": 1,
-                                    "step4Information": {
-                                        "controllerConstraints": [
-                                            {
-                                                "id": 1,
-                                                "sourceUcaHc": "UCA-1",
-                                                "constraintId": "CC-01",
-                                                "constraintStatement": "Autopilot shall provide Adjust heading when obstacle distance is below threshold."
-                                            },
-                                            {
-                                                "id": 2,
-                                                "sourceUcaHc": "HC-2",
-                                                "constraintId": "CC-02",
-                                                "constraintStatement": "Operator shall avoid Pause mission while automated avoidance is active unless emergency conditions are confirmed."
-                                            }
-                                        ]
-                                    }
+                                    "ref": "UCA-01",
+                                    "controlActionRef": "CA-02",
+                                    "sourceActor": "Autopilot",
+                                    "targetActor": "Operator",
+                                    "controller": "Autopilot",
+                                    "controlAction": "Pause mission",
+                                    "controlledProcess": "Operator",
+                                    "category": "Not provided",
+                                    "context": "Context pending refinement",
+                                    "consequence": "Consequence pending refinement",
+                                    "rationale": "Rationale pending refinement",
+                                    "hazardRefs": ["H-1", "aaa"],
+                                    "responsibilityId": "",
+                                    "safetyConstraintId": ""
                                 }
-                                """)
-                        .when()
-                        .post("/api/projects/step_four_project_update")
-                        .then()
-                        .statusCode(200);
+                            ],
+                            "hazardousConditions": [],
+                            "controllerConstraints": [
+                                {
+                                    "id": 1,
+                                    "sourceUcaHc": "UCA-01",
+                                    "constraintId": "CC-01",
+                                    "constraintStatement": "Autopilot shall provide Adjust heading when obstacle distance is below threshold."
+                                }
+                            ]
+                        }
+                    }
+                    """)
+            .when()
+            .post("/api/projects/step_four_project_update/" + projectId)
+            .then()
+            .statusCode(200);
 
-                given()
-                        .when()
-                        .get("/api/projects/step_four_project_information/" + projectId)
-                        .then()
-                        .statusCode(200)
-                        .body("controllerConstraints[0].sourceUcaHc", equalTo("UCA-1"))
-                        .body("controllerConstraints[0].constraintId", equalTo("CC-01"))
-                        .body("controllerConstraints[1].sourceUcaHc", equalTo("HC-2"));
+        given()
+            .when()
+            .get("/api/projects/step_four_project_information/" + projectId)
+            .then()
+            .statusCode(200)
+            .body("unsafeControlActions[0].ref", equalTo("UCA-01"))
+            .body("unsafeControlActions[0].controlActionRef", equalTo("CA-02"))
+            .body("unsafeControlActions[0].hazardRefs[0]", equalTo("H-1"))
+            .body("controllerConstraints[0].sourceUcaHc", equalTo("UCA-01"))
+            .body("controllerConstraints[0].constraintId", equalTo("CC-01"));
     }
 
     @Test

@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import com.autoresafety.domain.ProjectStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -308,7 +310,18 @@ public class ProjectDocumentDto {
         @AllArgsConstructor
         public static class Step4UcasDto {
                 private List<UcaDto> ucas;
+                private List<HazardousConditionDto> hazardousConditions;
                 private List<ControllerConstraintDto> controllerConstraints;
+
+                @JsonProperty("unsafeControlActions")
+                public List<UcaDto> getUnsafeControlActions() {
+                        return ucas;
+                }
+
+                @JsonProperty("unsafeControlActions")
+                public void setUnsafeControlActions(List<UcaDto> unsafeControlActions) {
+                        this.ucas = unsafeControlActions;
+                }
 
                 @Data
                 @Builder
@@ -318,13 +331,54 @@ public class ProjectDocumentDto {
                         @Positive
                         private Long id;
 
+                        private String ref;
+
+                        private String controlActionRef;
+
+                        private String sourceActor;
+
+                        private String targetActor;
+
                         private String controller;
 
                         private String controlAction;
 
+                        private String controlledProcess;
+
                         private String hazard;
 
                         private String category;
+
+                        private String context;
+
+                        private String consequence;
+
+                        private String rationale;
+
+                        private List<String> hazardRefs;
+
+                        private String responsibilityId;
+
+                        private String safetyConstraintId;
+                }
+
+                @Data
+                @Builder
+                @NoArgsConstructor
+                @AllArgsConstructor
+                public static class HazardousConditionDto {
+                        @Positive
+                        private Long id;
+
+                        private String ref;
+
+                        private String description;
+
+                        private String context;
+
+                        private String consequence;
+
+                        private List<String> hazardRefs;
                 }
 
                 @Data
