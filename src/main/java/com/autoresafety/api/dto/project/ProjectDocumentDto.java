@@ -31,6 +31,7 @@ public class ProjectDocumentDto {
         private Step3ControlStructureDto step3ControlStructure;
         private Step4UcasDto step4Ucas;
         private Step5ControllerConstraintsDto step5ControllerConstraints;
+        private Step5InformationDto step5Information;
         private Step6LossScenariosDto step6LossScenarios;
         private Step7ModelUpdateDto step7ModelUpdate;
 
@@ -419,6 +420,41 @@ public class ProjectDocumentDto {
                         private String enforcementMechanism;
 
                         private String status;
+                }
+        }
+
+        @Data
+        @Builder
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class Step5InformationDto {
+                private List<LossScenarioDto> lossScenarios;
+                private List<SafetyRequirementDto> safetyRequirements;
+
+                @Data
+                @Builder
+                @NoArgsConstructor
+                @AllArgsConstructor
+                public static class LossScenarioDto {
+                        private String id;
+
+                        private String description;
+
+                        private List<String> associatedUnsafeBehaviorIds;
+
+                        private String sourceRationale;
+                }
+
+                @Data
+                @Builder
+                @NoArgsConstructor
+                @AllArgsConstructor
+                public static class SafetyRequirementDto {
+                        private String id;
+
+                        private String description;
+
+                        private List<String> addressedLossScenarioIds;
                 }
         }
 

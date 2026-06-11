@@ -2,18 +2,23 @@ package com.autoresafety.api;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.autoresafety.api.dto.ProjectNamePayload;
 import com.autoresafety.api.dto.ProjectPayload;
 import com.autoresafety.api.dto.ProjectResumeDto;
 import com.autoresafety.api.dto.ProjectStatusUpdatePayload;
 import com.autoresafety.api.dto.StepFourProjectUpdatePayload;
+import com.autoresafety.api.dto.StepFiveProjectInformationDto;
+import com.autoresafety.api.dto.StepFiveProjectUpdatePayload;
 import com.autoresafety.api.dto.StepOneProjectInformationDto;
 import com.autoresafety.api.dto.StepOneProjectUpdatePayload;
 import com.autoresafety.api.dto.StepThreeProjectUpdatePayload;
@@ -58,6 +63,9 @@ public class ProjectResource {
         "sensor",
         "external input"
     );
+
+    private static final Pattern STEP5_LOSS_SCENARIO_ID_PATTERN = Pattern.compile("^LS-(\\d{2,})$");
+    private static final Pattern STEP5_SAFETY_REQUIREMENT_ID_PATTERN = Pattern.compile("^SR-(\\d{2,})$");
 
     @Inject
     ProjectRepository repository;
@@ -199,19 +207,82 @@ public class ProjectResource {
 
     @GET
     @Path("/step_five_project_information/{id}")
-    public ProjectDocumentDto.Step5ControllerConstraintsDto getStepFiveInformation(@PathParam("id") Long id) {
+    public StepFiveProjectInformationDto getStepFiveInformation(@PathParam("id") Long id) {
+        repository.findByIdOptional(id).orElseThrow(NotFoundException::new);
         ProjectDocumentDto document = projectDocumentService.getByProjectId(id);
+        return buildStepFiveInformation(id, document);
+    }
+
+    @POST
+    @Path("/step_five_project_update")
+    @Transactional
+    public StepFiveProjectInformationDto updateStepFive(@Valid StepFiveProjectUpdatePayload payload) {
+        Long projectId = payload == null ? null : payload.id();
+        if (projectId == null) {
+            throw new BadRequestException("id is required");
+        }
+
+        repository.findByIdOptional(projectId).orElseThrow(NotFoundException::new);
+
+        ProjectDocumentDto document = projectDocumentService.getByProjectId(projectId);
         if (document == null) {
-            throw new NotFoundException();
+            document = ProjectDocumentDto.builder().build();
         }
 
-        if (document.getStep5ControllerConstraints() == null) {
-            return ProjectDocumentDto.Step5ControllerConstraintsDto.builder()
-                .constraints(null)
-                .build();
+        List<StepFiveProjectInformationDto.StepFiveUnsafeBehavior> unsafeBehaviors =
+            buildStepFiveUnsafeBehaviors(document.getStep4Ucas());
+        Set<String> availableUnsafeBehaviorIds = new LinkedHashSet<>();
+        for (StepFiveProjectInformationDto.StepFiveUnsafeBehavior unsafeBehavior : unsafeBehaviors) {
+            if (unsafeBehavior != null && unsafeBehavior.id() != null) {
+                availableUnsafeBehaviorIds.add(unsafeBehavior.id());
+            }
         }
 
-        return document.getStep5ControllerConstraints();
+        validateStepFivePayload(payload, availableUnsafeBehaviorIds);
+
+        List<ProjectDocumentDto.Step5InformationDto.LossScenarioDto> mappedLossScenarios = new ArrayList<>();
+        List<StepFiveProjectUpdatePayload.LossScenarioPayload> requestedLossScenarios =
+            payload.step5Information().lossScenarios();
+        if (requestedLossScenarios != null) {
+            for (StepFiveProjectUpdatePayload.LossScenarioPayload lossScenario : requestedLossScenarios) {
+                if (lossScenario == null) {
+                    continue;
+                }
+
+                mappedLossScenarios.add(ProjectDocumentDto.Step5InformationDto.LossScenarioDto.builder()
+                    .id(lossScenario.id().trim())
+                    .description(lossScenario.description().trim())
+                    .associatedUnsafeBehaviorIds(toTrimmedList(lossScenario.associatedUnsafeBehaviorIds()))
+                    .sourceRationale(trimToNull(lossScenario.sourceRationale()))
+                    .build());
+            }
+        }
+
+        List<ProjectDocumentDto.Step5InformationDto.SafetyRequirementDto> mappedSafetyRequirements = new ArrayList<>();
+        List<StepFiveProjectUpdatePayload.SafetyRequirementPayload> requestedSafetyRequirements =
+            payload.step5Information().safetyRequirements();
+        if (requestedSafetyRequirements != null) {
+            for (StepFiveProjectUpdatePayload.SafetyRequirementPayload safetyRequirement : requestedSafetyRequirements) {
+                if (safetyRequirement == null) {
+                    continue;
+                }
+
+                mappedSafetyRequirements.add(ProjectDocumentDto.Step5InformationDto.SafetyRequirementDto.builder()
+                    .id(safetyRequirement.id().trim())
+                    .description(safetyRequirement.description().trim())
+                    .addressedLossScenarioIds(toTrimmedList(safetyRequirement.addressedLossScenarioIds()))
+                    .build());
+            }
+        }
+
+        ProjectDocumentDto.Step5InformationDto persistedStep5 = ProjectDocumentDto.Step5InformationDto.builder()
+            .lossScenarios(mappedLossScenarios)
+            .safetyRequirements(mappedSafetyRequirements)
+            .build();
+        document.setStep5Information(persistedStep5);
+
+        projectDocumentService.saveOrUpdate(projectId, document);
+        return buildStepFiveInformation(projectId, document);
     }
 
     @GET
@@ -509,6 +580,274 @@ public class ProjectResource {
             return null;
         }
         return objectives.trim();
+    }
+
+    private StepFiveProjectInformationDto buildStepFiveInformation(Long projectId, ProjectDocumentDto document) {
+        List<StepFiveProjectInformationDto.StepFiveUnsafeBehavior> unsafeBehaviors =
+            buildStepFiveUnsafeBehaviors(document == null ? null : document.getStep4Ucas());
+
+        ProjectDocumentDto.Step5InformationDto step5 = document == null ? null : document.getStep5Information();
+        List<StepFiveProjectInformationDto.StepFiveLossScenario> lossScenarios = new ArrayList<>();
+        List<StepFiveProjectInformationDto.StepFiveSafetyRequirement> safetyRequirements = new ArrayList<>();
+
+        if (step5 != null && step5.getLossScenarios() != null) {
+            for (ProjectDocumentDto.Step5InformationDto.LossScenarioDto lossScenario : step5.getLossScenarios()) {
+                if (lossScenario == null) {
+                    continue;
+                }
+
+                lossScenarios.add(new StepFiveProjectInformationDto.StepFiveLossScenario(
+                    trimToNull(lossScenario.getId()),
+                    trimToNull(lossScenario.getDescription()),
+                    toTrimmedList(lossScenario.getAssociatedUnsafeBehaviorIds()),
+                    trimToNull(lossScenario.getSourceRationale())
+                ));
+            }
+        }
+
+        if (step5 != null && step5.getSafetyRequirements() != null) {
+            for (ProjectDocumentDto.Step5InformationDto.SafetyRequirementDto safetyRequirement : step5.getSafetyRequirements()) {
+                if (safetyRequirement == null) {
+                    continue;
+                }
+
+                safetyRequirements.add(new StepFiveProjectInformationDto.StepFiveSafetyRequirement(
+                    trimToNull(safetyRequirement.getId()),
+                    trimToNull(safetyRequirement.getDescription()),
+                    toTrimmedList(safetyRequirement.getAddressedLossScenarioIds())
+                ));
+            }
+        }
+
+        StepFiveProjectInformationDto.Defaults defaults = new StepFiveProjectInformationDto.Defaults(
+            nextGeneratedStep5Id("LS", lossScenarios.stream().map(StepFiveProjectInformationDto.StepFiveLossScenario::id).toList()),
+            nextGeneratedStep5Id("SR", safetyRequirements.stream().map(StepFiveProjectInformationDto.StepFiveSafetyRequirement::id).toList())
+        );
+
+        return new StepFiveProjectInformationDto(
+            projectId,
+            5,
+            new StepFiveProjectInformationDto.AvailableInputs(unsafeBehaviors),
+            new StepFiveProjectInformationDto.CurrentData(lossScenarios, safetyRequirements),
+            defaults
+        );
+    }
+
+    private List<StepFiveProjectInformationDto.StepFiveUnsafeBehavior> buildStepFiveUnsafeBehaviors(
+        ProjectDocumentDto.Step4UcasDto step4
+    ) {
+        List<StepFiveProjectInformationDto.StepFiveUnsafeBehavior> unsafeBehaviors = new ArrayList<>();
+        if (step4 == null) {
+            return unsafeBehaviors;
+        }
+
+        int ucaIndex = 1;
+        if (step4.getUcas() != null) {
+            for (ProjectDocumentDto.Step4UcasDto.UcaDto uca : step4.getUcas()) {
+                if (uca == null) {
+                    continue;
+                }
+
+                String id = firstNonBlank(uca.getRef(), formatGeneratedId("UCA", ucaIndex));
+                String description = firstNonBlank(
+                    uca.getRationale(),
+                    describeUcaFallback(uca),
+                    id
+                );
+                List<String> hazards = collectHazards(uca.getHazardRefs(), uca.getHazard());
+
+                unsafeBehaviors.add(new StepFiveProjectInformationDto.StepFiveUnsafeBehavior(
+                    id,
+                    "UCA",
+                    id,
+                    description,
+                    hazards
+                ));
+                ucaIndex++;
+            }
+        }
+
+        int hcIndex = 1;
+        if (step4.getHazardousConditions() != null) {
+            for (ProjectDocumentDto.Step4UcasDto.HazardousConditionDto hazardousCondition : step4.getHazardousConditions()) {
+                if (hazardousCondition == null) {
+                    continue;
+                }
+
+                String id = firstNonBlank(hazardousCondition.getRef(), formatGeneratedId("HC", hcIndex));
+                String description = firstNonBlank(
+                    hazardousCondition.getDescription(),
+                    hazardousCondition.getConsequence(),
+                    id
+                );
+
+                unsafeBehaviors.add(new StepFiveProjectInformationDto.StepFiveUnsafeBehavior(
+                    id,
+                    "HC",
+                    id,
+                    description,
+                    toTrimmedList(hazardousCondition.getHazardRefs())
+                ));
+                hcIndex++;
+            }
+        }
+
+        return unsafeBehaviors;
+    }
+
+    private static void validateStepFivePayload(
+        StepFiveProjectUpdatePayload payload,
+        Set<String> availableUnsafeBehaviorIds
+    ) {
+        if (payload == null || payload.step5Information() == null) {
+            throw new BadRequestException("step5Information is required");
+        }
+
+        Set<String> lossScenarioIds = new LinkedHashSet<>();
+        List<StepFiveProjectUpdatePayload.LossScenarioPayload> lossScenarios = payload.step5Information().lossScenarios();
+        if (lossScenarios != null) {
+            for (StepFiveProjectUpdatePayload.LossScenarioPayload lossScenario : lossScenarios) {
+                if (lossScenario == null) {
+                    continue;
+                }
+
+                String lossScenarioId = trimToNull(lossScenario.id());
+                if (lossScenarioId == null || !STEP5_LOSS_SCENARIO_ID_PATTERN.matcher(lossScenarioId).matches()) {
+                    throw new BadRequestException("lossScenarios[].id must match LS-XX");
+                }
+                if (!lossScenarioIds.add(lossScenarioId)) {
+                    throw new BadRequestException("Duplicate loss scenario id: " + lossScenarioId);
+                }
+                if (trimToNull(lossScenario.description()) == null) {
+                    throw new BadRequestException("lossScenarios[].description is required");
+                }
+
+                List<String> associatedUnsafeBehaviorIds = toTrimmedList(lossScenario.associatedUnsafeBehaviorIds());
+                for (String associatedUnsafeBehaviorId : associatedUnsafeBehaviorIds) {
+                    if (!availableUnsafeBehaviorIds.contains(associatedUnsafeBehaviorId)) {
+                        throw new BadRequestException(
+                            "lossScenarios[].associatedUnsafeBehaviorIds contains unknown id: " + associatedUnsafeBehaviorId
+                        );
+                    }
+                }
+            }
+        }
+
+        List<StepFiveProjectUpdatePayload.SafetyRequirementPayload> safetyRequirements = payload.step5Information().safetyRequirements();
+        if (safetyRequirements != null) {
+            for (StepFiveProjectUpdatePayload.SafetyRequirementPayload safetyRequirement : safetyRequirements) {
+                if (safetyRequirement == null) {
+                    continue;
+                }
+
+                String safetyRequirementId = trimToNull(safetyRequirement.id());
+                if (safetyRequirementId == null || !STEP5_SAFETY_REQUIREMENT_ID_PATTERN.matcher(safetyRequirementId).matches()) {
+                    throw new BadRequestException("safetyRequirements[].id must match SR-XX");
+                }
+                if (trimToNull(safetyRequirement.description()) == null) {
+                    throw new BadRequestException("safetyRequirements[].description is required");
+                }
+
+                List<String> addressedLossScenarioIds = toTrimmedList(safetyRequirement.addressedLossScenarioIds());
+                for (String addressedLossScenarioId : addressedLossScenarioIds) {
+                    if (!lossScenarioIds.contains(addressedLossScenarioId)) {
+                        throw new BadRequestException(
+                            "safetyRequirements[].addressedLossScenarioIds contains unknown id: " + addressedLossScenarioId
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<String> collectHazards(List<String> hazardRefs, String hazard) {
+        LinkedHashSet<String> hazards = new LinkedHashSet<>(toTrimmedList(hazardRefs));
+        String normalizedHazard = trimToNull(hazard);
+        if (normalizedHazard != null) {
+            hazards.add(normalizedHazard);
+        }
+        return new ArrayList<>(hazards);
+    }
+
+    private static String describeUcaFallback(ProjectDocumentDto.Step4UcasDto.UcaDto uca) {
+        String controller = trimToNull(uca.getController());
+        String controlAction = trimToNull(uca.getControlAction());
+        String category = trimToNull(uca.getCategory());
+
+        if (controller != null && controlAction != null && category != null) {
+            return controller + " " + controlAction + " (" + category + ")";
+        }
+        if (controller != null && controlAction != null) {
+            return controller + " " + controlAction;
+        }
+        return firstNonBlank(controller, controlAction, category);
+    }
+
+    private static String formatGeneratedId(String prefix, int index) {
+        return prefix + "-" + String.format("%02d", index);
+    }
+
+    private static String nextGeneratedStep5Id(String prefix, List<String> ids) {
+        Pattern pattern = "LS".equals(prefix) ? STEP5_LOSS_SCENARIO_ID_PATTERN : STEP5_SAFETY_REQUIREMENT_ID_PATTERN;
+        int max = 0;
+        int width = 2;
+
+        if (ids != null) {
+            for (String id : ids) {
+                String normalizedId = trimToNull(id);
+                if (normalizedId == null) {
+                    continue;
+                }
+                Matcher matcher = pattern.matcher(normalizedId);
+                if (!matcher.matches()) {
+                    continue;
+                }
+
+                String numericPart = matcher.group(1);
+                width = Math.max(width, numericPart.length());
+                int parsed = Integer.parseInt(numericPart);
+                max = Math.max(max, parsed);
+            }
+        }
+
+        int next = max + 1;
+        return prefix + "-" + String.format("%0" + width + "d", next);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String normalized = trimToNull(value);
+            if (normalized != null) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    private static List<String> toTrimmedList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> normalizedValues = new ArrayList<>();
+        for (String value : values) {
+            String normalized = trimToNull(value);
+            if (normalized != null) {
+                normalizedValues.add(normalized);
+            }
+        }
+        return normalizedValues;
     }
 
     private static String resolveEntityName(Map<String, String> entityNamesById, String entityId) {
